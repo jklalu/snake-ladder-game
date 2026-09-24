@@ -359,13 +359,33 @@ function updateGameState(state) {
     // Update pull skill button
     const myPlayer = state.players.find(p => p.id === myPlayerId);
     if (myPlayer) {
-        pullSkillBtn.disabled = !isMyTurn || myPlayer.pullUsed;
-        const statusSpan = pullSkillBtn.querySelector('.skill-status');
-        statusSpan.textContent = myPlayer.pullUsed ? '(Used)' : '(Available)';
+        renderPullSkillButton(myPlayer, isMyTurn);
     }
     
     // Spectator (host) view
     applySpectatorMode();
+}
+
+// Render the Pull skill button: enabled/ready when available, otherwise show a
+// charge meter that fills 1/6 each turn toward the next regeneration (every 6th turn).
+const PULL_CYCLE = 6;
+function renderPullSkillButton(player, isMyTurn) {
+    const statusSpan = pullSkillBtn.querySelector('.skill-status');
+    const fill = pullSkillBtn.querySelector('.skill-charge-fill');
+    
+    pullSkillBtn.disabled = !isMyTurn || player.pullUsed;
+    
+    if (!player.pullUsed) {
+        if (statusSpan) statusSpan.textContent = '(Available)';
+        if (fill) fill.style.width = '100%';
+        return;
+    }
+    
+    const r = (player.turnsTaken || 0) % PULL_CYCLE;
+    const turnsUntilReady = r === 0 ? PULL_CYCLE : PULL_CYCLE - r;
+    const charged = PULL_CYCLE - turnsUntilReady; // 0..5 turns banked toward the next regen
+    if (statusSpan) statusSpan.textContent = `(Used · ${charged}/${PULL_CYCLE})`;
+    if (fill) fill.style.width = (charged / PULL_CYCLE) * 100 + '%';
 }
 
 // The room host is a spectator, not a player - hide the player-only controls
@@ -878,9 +898,7 @@ socket.on('turnChanged', (state) => {
     // Update pull skill button
     const myP = state.players.find(p => p.id === myPlayerId);
     if (myP) {
-        pullSkillBtn.disabled = !isMyTurn || myP.pullUsed;
-        const statusSpan = pullSkillBtn.querySelector('.skill-status');
-        statusSpan.textContent = myP.pullUsed ? '(Used)' : '(Available)';
+        renderPullSkillButton(myP, isMyTurn);
     }
     
     diceResult.textContent = '';
