@@ -30,6 +30,8 @@ function scheduleNextTurn(roomCode, expectedAnimMs) {
         if (room.nextTurnDone) return;
         room.nextTurnDone = true;
         room.game.nextTurn();
+        // Start of the new current player's turn: count it + regen Pull every 6th turn
+        room.game.beginTurn(room.game.getCurrentPlayer().id);
         io.to(roomCode).emit('turnChanged', room.game.getState());
         // Continue bot turns if next player is also bot
         startBotTurns(roomCode);
@@ -305,6 +307,8 @@ io.on('connection', (socket) => {
         // Human players only - no bot fill in normal rooms (Test Mode has its own bots)
         
         if (room.game.start()) {
+            // Count the first player's opening turn (their turn 1 of the 6-turn Pull cycle)
+            room.game.beginTurn(room.game.getCurrentPlayer().id);
             io.to(currentRoom).emit('gameStarted', room.game.getState());
             console.log(`Game started in room ${currentRoom}`);
             

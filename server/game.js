@@ -49,6 +49,7 @@ class Game {
             avatar: avatar || null,
             position: 0,
             pullUsed: false,
+            turnsTaken: 0,
             shieldAvailable: true
         });
     }
@@ -81,6 +82,21 @@ class Game {
     
     getPlayerById(playerId) {
         return this.players.find(p => p.id === playerId);
+    }
+    
+    // Called at the START of a player's turn (1 turn == 1 dice roll here).
+    // Counts the turn and regenerates the Pull skill every 6th turn so it is a
+    // periodic ability, not a permanent one-shot. Returns true if it just regenerated.
+    beginTurn(playerId) {
+        const player = this.getPlayerById(playerId);
+        if (!player) return false;
+        player.turnsTaken = (player.turnsTaken || 0) + 1;
+        if (player.turnsTaken % 6 === 0) {
+            const regenerated = player.pullUsed;
+            player.pullUsed = false;
+            return regenerated;
+        }
+        return false;
     }
     
     // Check if position has a snake
@@ -214,6 +230,7 @@ class Game {
                 avatar: p.avatar,
                 position: p.position,
                 pullUsed: p.pullUsed,
+                turnsTaken: p.turnsTaken,
                 shieldAvailable: p.shieldAvailable
             })),
             currentTurn: this.currentTurn,
