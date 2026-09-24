@@ -572,6 +572,19 @@ body {
     transform: scale(1.1);
 }
 
+/* Host spectator badge in the game header */
+.spectator-badge {
+    display: inline-block;
+    background: #667eea;
+    color: white;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 999px;
+    margin-right: 12px;
+    vertical-align: middle;
+}
+
 /* Hidden YouTube background-music player.
    Kept in the render tree (off-screen, not display:none) so audio keeps playing. */
 .bg-music-player {

@@ -356,7 +356,45 @@ io.on('connection', (socket) => {
                 startBotTurns(roomCode);
             }
         } else {
-            callback({ success: false, message: 'Player not found in room' });
+            // Not a game player - the SPECTATOR HOST may be rejoining after the
+            // lobby -> game.html redirect. The host is never in game.players, so
+            // match them against the stored host entry in the connection map.
+            let hostEntry = null;
+            for (const [id, info] of room.players.entries()) {
+                if (info.isHost && info.name === data.playerName) {
+                    hostEntry = { id, info };
+                    break;
+                }
+            }
+
+            if (hostEntry) {
+                room.players.delete(hostEntry.id);
+                room.players.set(socket.id, {
+                    id: socket.id,
+                    name: hostEntry.info.name,
+                    avatar: data.avatar || hostEntry.info.avatar || null,
+                    isHost: true
+                });
+                room.host = socket.id;
+
+                currentRoom = roomCode;
+                playerName = hostEntry.info.name;
+                isHost = true;
+
+                socket.join(roomCode);
+
+                console.log(`Spectator host ${hostEntry.info.name} rejoined room ${roomCode} with new socket ${socket.id}`);
+                callback({ success: true, gameState: room.game.getState() });
+
+                // Resume bot turns if it's currently a bot's turn
+                const currentPlayer = room.game.getCurrentPlayer();
+                const currentPlayerData = room.players.get(currentPlayer.id);
+                if (currentPlayerData && currentPlayerData.isBot) {
+                    startBotTurns(roomCode);
+                }
+            } else {
+                callback({ success: false, message: 'Player not found in room' });
+            }
         }
     });
     
@@ -612,7 +650,11 @@ io.on('connection', (socket) => {
                     const player = room.game.players.find(p => p.name === savedPlayerName && p.id !== savedSocketId);
                     const reconnected = player && room.players.has(player.id);
                     
-                    if (reconnected) {
+                    // Spectator host reconnected: rejoinRoom migrated room.host to a
+                    // new live socket, so the old host socket must not trigger cleanup
+                    const reconnectedHost = savedIsHost && room.host !== savedSocketId && room.players.has(room.host);
+                    
+                    if (reconnected || reconnectedHost) {
                         console.log(`Player ${savedPlayerName} reconnected, skipping cleanup`);
                         return;
                     }

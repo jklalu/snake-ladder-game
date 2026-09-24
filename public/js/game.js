@@ -363,6 +363,34 @@ function updateGameState(state) {
         const statusSpan = pullSkillBtn.querySelector('.skill-status');
         statusSpan.textContent = myPlayer.pullUsed ? '(Used)' : '(Available)';
     }
+    
+    // Spectator (host) view
+    applySpectatorMode();
+}
+
+// The room host is a spectator, not a player - hide the player-only controls
+// and show a badge so it's clear they are watching, not waiting on a turn.
+function applySpectatorMode() {
+    const isSpectator = !myPlayerId;
+    const skillsSection = document.querySelector('.skills-section');
+    
+    if (rollDiceBtn) rollDiceBtn.style.display = isSpectator ? 'none' : '';
+    if (skillsSection) skillsSection.style.display = isSpectator ? 'none' : '';
+    
+    let badge = document.getElementById('spectatorBadge');
+    if (isSpectator) {
+        if (!badge) {
+            badge = document.createElement('span');
+            badge.id = 'spectatorBadge';
+            badge.className = 'spectator-badge';
+            badge.textContent = '👁️ Spectating';
+            const header = document.querySelector('.room-info-header');
+            if (header) header.insertBefore(badge, header.firstChild);
+        }
+        if (diceResult) diceResult.textContent = 'You are the host — spectating the game';
+    } else if (badge) {
+        badge.remove();
+    }
 }
 
 // Update players list in side panel - sorted by position (highest first) with rank badges
