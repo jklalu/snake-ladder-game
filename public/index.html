@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snake & Ladder - Lobby</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="lobby-container">
+            <h1>🐍 Snake & Ladder 🪜</h1>
+            <p class="subtitle">Multiplayer Game with Custom Dice & Powers</p>
+            
+            <!-- Initial Screen -->
+            <div id="initialScreen" class="screen">
+                <div class="input-group">
+                    <label for="playerName">Your Name:</label>
+                    <input type="text" id="playerName" placeholder="Enter your name" maxlength="15">
+                </div>
+                
+                <div class="input-group">
+                    <label>Profile Picture (optional):</label>
+                    <div class="avatar-picker">
+                        <div id="avatarPreview" class="avatar-preview">?</div>
+                        <label class="btn btn-secondary btn-small" for="avatarInput">Choose Photo</label>
+                        <input type="file" id="avatarInput" accept="image/*" class="hidden">
+                    </div>
+                </div>
+                
+                <div class="button-group">
+                    <button id="createRoomBtn" class="btn btn-primary">Create Room</button>
+                    <span class="or-divider">OR</span>
+                    <button id="showJoinBtn" class="btn btn-secondary">Join Room</button>
+                    <span class="or-divider">OR</span>
+                    <button id="testModeBtn" class="btn btn-success">Test Mode (vs Bots)</button>
+                </div>
+                
+                <!-- Join Room Form (hidden initially) -->
+                <div id="joinForm" class="join-form hidden">
+                    <div class="input-group">
+                        <label for="roomCode">Room Code:</label>
+                        <input type="text" id="roomCode" placeholder="Enter room code" maxlength="6" style="text-transform: uppercase;">
+                    </div>
+                    <button id="joinRoomBtn" class="btn btn-primary">Join</button>
+                </div>
+            </div>
+            
+            <!-- Waiting Room (shown after creating/joining) -->
+            <div id="waitingRoom" class="screen hidden">
+                <div class="room-info">
+                    <h2>Room Code: <span id="displayRoomCode" class="room-code">------</span></h2>
+                    <p>Share this code with your friends!</p>
+                </div>
+                
+                <div class="players-list">
+                    <h3>Players (<span id="playerCount">0</span>/20)</h3>
+                    <ul id="playersList"></ul>
+                </div>
+                
+                <div class="waiting-actions">
+                    <button id="startGameBtn" class="btn btn-success hidden">Start Game</button>
+                    <p id="waitingMessage" class="waiting-msg">Waiting for players...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="js/lobby.js"></script>
+</body>
+</html>
