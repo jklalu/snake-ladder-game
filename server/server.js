@@ -51,6 +51,78 @@ function estimateAnimationMs(oldPos, newPos, finalPos) {
     return ms;
 }
 
+// Simulate spacebar presses for a BOT defender in a shield battle (bots have no live socket).
+function startBotShieldPresses(roomCode) {
+    const room = rooms.get(roomCode);
+    if (!room || !room.game.shieldBattle) return;
+    const battle = room.game.shieldBattle;
+    const tick = setInterval(() => {
+        const r = rooms.get(roomCode);
+        // Battle replaced/ended already - stop ticking
+        if (!r || r.game.shieldBattle !== battle) {
+            clearInterval(tick);
+            return;
+        }
+        const elapsed = Date.now() - battle.startTime;
+        if (elapsed >= battle.duration) {
+            clearInterval(tick);
+            return;
+        }
+        battle.defenderPresses += Math.floor(Math.random() * 3); // 0-2 presses per tick
+        io.to(roomCode).emit('shieldBattleUpdate', {
+            attackerPresses: battle.attackerPresses,
+            defenderPresses: battle.defenderPresses,
+            timeLeft: battle.duration - elapsed
+        });
+    }, 110);
+}
+
+// Resolve an in-progress shield battle triggered by a Pull attempt.
+// Idempotent: safe to call from the client timer and the server safety-net timeout.
+function resolveShieldBattle(roomCode, reason) {
+    const room = rooms.get(roomCode);
+    if (!room || !room.game.shieldBattle) return;
+
+    const battle = room.game.shieldBattle;
+    const pending = battle.pendingPull;
+    room.game.shieldBattle = null;
+
+    // No pending pull (shouldn't happen) - just close the modal on all clients
+    if (!pending) {
+        io.to(roomCode).emit('shieldBattleEnded', { state: room.game.getState() });
+        return;
+    }
+
+    const attackerWins = battle.attackerPresses > battle.defenderPresses;
+    const caster = room.game.getPlayerById(pending.casterId);
+    const target = room.game.getPlayerById(pending.targetId);
+
+    let message;
+    if (attackerWins && caster && target) {
+        target.position = pending.casterPosition;
+        message = `${caster.name} broke through ${target.name}'s shield and pulled them to ${pending.casterPosition}`;
+        console.log(`[ShieldBattle:${reason}] attacker wins - ${message}`);
+    } else if (caster && target) {
+        message = `${target.name} raised a shield and blocked ${caster.name}'s pull!`;
+        console.log(`[ShieldBattle:${reason}] defender wins - ${message}`);
+    } else {
+        message = 'Shield battle ended';
+        console.log(`[ShieldBattle:${reason}] player missing - ${message}`);
+    }
+
+    io.to(roomCode).emit('shieldBattleEnded', {
+        winner: attackerWins ? 'attacker' : 'defender',
+        winnerName: attackerWins
+            ? (caster ? caster.name : 'Attacker')
+            : (target ? target.name : 'Defender'),
+        attackerPresses: battle.attackerPresses,
+        defenderPresses: battle.defenderPresses,
+        pullApplied: attackerWins,
+        resultMessage: message,
+        state: room.game.getState()
+    });
+}
+
 // Bot turn handler
 function startBotTurns(roomCode) {
     const room = rooms.get(roomCode);
@@ -405,6 +477,9 @@ io.on('connection', (socket) => {
         const room = rooms.get(currentRoom);
         if (!room || !room.game.gameStarted) return;
         
+        // Block rolling while a pull shield battle is resolving
+        if (room.game.shieldBattle) return;
+        
         const currentPlayer = room.game.getCurrentPlayer();
         if (currentPlayer.id !== socket.id) {
             console.log('Not your turn:', socket.id, 'vs', currentPlayer.id);
@@ -505,7 +580,7 @@ io.on('connection', (socket) => {
         }
     });
     
-    // Pull skill
+    // Pull skill - triggers a shield battle with the target before the pull lands
     socket.on('usePull', (data) => {
         if (!currentRoom) return;
         
@@ -518,45 +593,69 @@ io.on('connection', (socket) => {
             return;
         }
         
-        const result = room.game.pullPlayer(socket.id, data.targetId);
-        
-        if (result.success) {
-            console.log(`[Pull] ${result.caster} pulled ${result.target} from ${result.fromPosition} to ${result.toPosition}`);
-            io.to(currentRoom).emit('pullUsed', {
-                message: result.message,
-                state: room.game.getState()
-            });
-        } else {
-            socket.emit('pullError', { message: result.error || 'Pull failed' });
+        if (room.game.shieldBattle) {
+            socket.emit('pullError', { message: 'A shield battle is already in progress' });
+            return;
         }
-    });
-    
-    // Shield battle - this is for when a player is close to winning
-    // and another player's dice would land on them
-    socket.on('shieldBattleStart', (data) => {
-        if (!currentRoom) return;
         
-        const room = rooms.get(currentRoom);
-        if (!room) return;
+        // Validate the pull attempt WITHOUT moving anyone yet
+        const caster = room.game.getPlayerById(socket.id);
+        const target = room.game.getPlayerById(data.targetId);
+        if (!caster || !target) {
+            socket.emit('pullError', { message: 'Player not found' });
+            return;
+        }
+        if (caster.pullUsed) {
+            socket.emit('pullError', { message: 'Pull skill already used' });
+            return;
+        }
+        if (caster.id === target.id) {
+            socket.emit('pullError', { message: 'Cannot pull yourself' });
+            return;
+        }
         
-        // Start shield battle between attacker and defender
+        // Consume the Pull skill now - it is one-shot whether the battle is won or lost
+        caster.pullUsed = true;
+        
+        // Start the shield battle: attacker = caster, defender = target
         room.game.shieldBattle = {
-            attacker: data.attackerId,
-            defender: data.defenderId,
+            attacker: caster.id,
+            defender: target.id,
             attackerPresses: 0,
             defenderPresses: 0,
             startTime: Date.now(),
-            duration: 3000 // 3 seconds
+            duration: 3000,
+            pendingPull: { casterId: caster.id, targetId: target.id, casterPosition: caster.position }
         };
         
+        console.log(`[Pull] ${caster.name} attempts to pull ${target.name} -> shield battle started`);
+        
         io.to(currentRoom).emit('shieldBattleStarted', {
-            attacker: data.attackerId,
-            defender: data.defenderId,
+            attacker: caster.id,
+            defender: target.id,
             duration: 3000
         });
+        
+        // A bot defender has no live socket, so simulate its presses server-side
+        const targetConn = room.players.get(target.id);
+        if (targetConn && targetConn.isBot) {
+            startBotShieldPresses(currentRoom);
+        }
+        
+        // Safety net: if the client-driven end never arrives (refresh/closed tab),
+        // resolve anyway so the game can't hang on an open battle.
+        const pendingCasterId = caster.id;
+        setTimeout(() => {
+            const r = rooms.get(currentRoom);
+            if (r && r.game.shieldBattle && r.game.shieldBattle.pendingPull &&
+                r.game.shieldBattle.pendingPull.casterId === pendingCasterId) {
+                resolveShieldBattle(currentRoom, 'timeout');
+            }
+        }, 3000 + 2500);
     });
     
-    // Shield battle - spacebar press
+    // Shield battle - spacebar press (attacker = puller, defender = pull target).
+    // A battle is started automatically by usePull; there is no manual start event.
     socket.on('shieldBattlePress', () => {
         if (!currentRoom) return;
         
@@ -582,28 +681,10 @@ io.on('connection', (socket) => {
         });
     });
     
-    // Shield battle - end (called by client after timer)
+    // Shield battle - end (called by the client when its timer runs out)
     socket.on('shieldBattleEnd', () => {
         if (!currentRoom) return;
-        
-        const room = rooms.get(currentRoom);
-        if (!room || !room.game.shieldBattle) return;
-        
-        const battle = room.game.shieldBattle;
-        const attackerWins = battle.attackerPresses > battle.defenderPresses;
-        
-        const attacker = room.game.getPlayerById(battle.attacker);
-        const defender = room.game.getPlayerById(battle.defender);
-        
-        io.to(currentRoom).emit('shieldBattleEnded', {
-            winner: attackerWins ? 'attacker' : 'defender',
-            winnerName: attackerWins ? attacker.name : defender.name,
-            attackerPresses: battle.attackerPresses,
-            defenderPresses: battle.defenderPresses,
-            state: room.game.getState()
-        });
-        
-        room.game.shieldBattle = null;
+        resolveShieldBattle(currentRoom, 'client');
     });
     
     // Client finished its dice/movement animation - advance the turn now

@@ -948,10 +948,20 @@ socket.on('shieldBattleEnded', (data) => {
     clearInterval(battleTimer);
     shieldBattleModal.classList.add('hidden');
     
-    const message = `${data.winnerName} won the shield battle with ${data.winner === 'attacker' ? data.attackerPresses : data.defenderPresses} presses!`;
-    addLogEntry(message);
+    const presses = data.winner === 'attacker' ? data.attackerPresses : data.defenderPresses;
+    addLogEntry(`${data.winnerName} won the shield battle with ${presses} presses!`);
     
-    updateGameState(data.state);
+    // resultMessage describes the pull outcome (applied or blocked by the shield)
+    if (data.resultMessage) {
+        addLogEntry(`⚡ ${data.resultMessage}`, data.pullApplied ? 'pull' : 'error');
+    }
+    if (data.pullApplied) {
+        SoundFX.pull();
+    }
+    
+    currentState = data.state;
+    updateGameState(currentState);
+    updatePlayerTokens(currentState);
 });
 
 socket.on('gameOver', (data) => {
