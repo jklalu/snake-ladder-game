@@ -366,26 +366,26 @@ function updateGameState(state) {
     applySpectatorMode();
 }
 
-// Render the Pull skill button: enabled/ready when available, otherwise show a
-// charge meter that fills 1/6 each turn toward the next regeneration (every 6th turn).
+// Render the Pull skill button as an HP-style charge bar (the button background
+// itself): full color when available, empty/grey right after use, refilling 1/6
+// each of the player's turns until it regenerates on their 6th turn.
 const PULL_CYCLE = 6;
 function renderPullSkillButton(player, isMyTurn) {
     const statusSpan = pullSkillBtn.querySelector('.skill-status');
-    const fill = pullSkillBtn.querySelector('.skill-charge-fill');
-    
     pullSkillBtn.disabled = !isMyTurn || player.pullUsed;
     
+    let pct = 100;
     if (!player.pullUsed) {
         if (statusSpan) statusSpan.textContent = '(Available)';
-        if (fill) fill.style.width = '100%';
-        return;
+        pct = 100; // full color
+    } else {
+        const r = (player.turnsTaken || 0) % PULL_CYCLE; // 0..5
+        const turnsUntilReady = r === 0 ? PULL_CYCLE : PULL_CYCLE - r;
+        const charged = Math.max(0, (PULL_CYCLE - turnsUntilReady) - 1); // 0 right after use, +1 per turn
+        pct = (charged / PULL_CYCLE) * 100;
+        if (statusSpan) statusSpan.textContent = `(Used · ${charged}/${PULL_CYCLE})`;
     }
-    
-    const r = (player.turnsTaken || 0) % PULL_CYCLE;
-    const turnsUntilReady = r === 0 ? PULL_CYCLE : PULL_CYCLE - r;
-    const charged = PULL_CYCLE - turnsUntilReady; // 0..5 turns banked toward the next regen
-    if (statusSpan) statusSpan.textContent = `(Used · ${charged}/${PULL_CYCLE})`;
-    if (fill) fill.style.width = (charged / PULL_CYCLE) * 100 + '%';
+    pullSkillBtn.style.setProperty('--pull-charge', pct + '%');
 }
 
 // The room host is a spectator, not a player - hide the player-only controls

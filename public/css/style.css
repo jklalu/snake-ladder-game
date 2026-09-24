@@ -669,41 +669,41 @@ body {
 }
 
 .btn-skill {
-    background: #b7b7b7; /* empty / uncharged track */
+    background: #b7b7b7; /* empty / spent track (HP bar depleted) */
     color: white;
     padding: 10px 20px;
     font-size: 0.9rem;
     position: relative;
     overflow: hidden;
+    isolation: isolate;
 }
 
 .btn-skill:disabled {
     cursor: not-allowed;
 }
 
-/* The label sits above the charging background */
-.skill-label {
-    position: relative;
-    z-index: 2;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
-}
-
-/* The charge IS the button background: fills left-to-right as turns pass */
-.skill-charge {
+/* The charge IS the button background: a colored bar that grows left-to-right */
+.btn-skill::before {
+    content: '';
     position: absolute;
-    inset: 0;
-    z-index: 1;
-}
-
-.skill-charge-fill {
-    height: 100%;
-    width: 100%;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: var(--pull-charge, 100%);
     background: linear-gradient(135deg, #ab47bc, #9c27b0);
     transition: width 0.4s ease;
+    z-index: -1;
 }
 
-.btn-skill:hover:not(:disabled) .skill-charge-fill {
+.btn-skill:hover:not(:disabled)::before {
     background: linear-gradient(135deg, #9c27b0, #7b1fa2);
+}
+
+/* Label sits above the charging background */
+.skill-label {
+    position: relative;
+    z-index: 1;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
 }
 
 .skill-status {
