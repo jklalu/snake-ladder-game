@@ -649,7 +649,7 @@ function addLogEntry(message, type = '') {
 }
 
 // Animate dice roll with spinning effect
-function animateDice(value) {
+function animateDice(value, onComplete) {
     let spins = 0;
     const maxSpins = 10;
     const spinInterval = setInterval(() => {
@@ -668,6 +668,9 @@ function animateDice(value) {
             setTimeout(() => {
                 diceDisplay.style.transform = 'scale(1)';
             }, 200);
+            
+            // Dice has settled - safe to reveal the result text now
+            if (onComplete) onComplete();
         }
     }, 80);
 }
@@ -676,8 +679,11 @@ function animateDice(value) {
 socket.on('diceRolled', (data) => {
     console.log('Dice rolled event received:', data);
     
-    animateDice(data.diceValue);
-    diceResult.textContent = `${data.playerName} rolled ${data.diceValue}`;
+    // Show "rolling" while the dice spins, reveal the value only once it settles
+    diceResult.textContent = `${data.playerName} is rolling ...`;
+    animateDice(data.diceValue, () => {
+        diceResult.textContent = `${data.playerName} rolled ${data.diceValue}`;
+    });
     
     let logMessage = `${data.playerName} rolled ${data.diceValue}`;
     let logType = '';
